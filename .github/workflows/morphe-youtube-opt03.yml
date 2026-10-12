@@ -1,0 +1,68 @@
+name: Morphe YouTube optimizacion 03
+on:
+  push:
+    branches:
+      - morphe-youtube-optim03
+    paths:
+      - 'optimization/overrides/**'
+      - '.github/workflows/morphe-youtube-opt03.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Obtener fuente oficial Morphe dev
+        uses: actions/checkout@v4
+        with:
+          repository: MorpheApp/morphe-patches
+          ref: dev
+          path: morphe
+
+      - name: Obtener optimizaciones del usuario
+        uses: actions/checkout@v4
+        with:
+          ref: morphe-youtube-optim03
+          path: modifications
+
+      - name: Aplicar optimizaciones sin eliminar parches
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="modifications/optimization/overrides/extensions/shared-youtube/library/src/main/java/app/morphe/extension/shared/patches/components/LithoFilterPatch.java"
+          dst="morphe/extensions/shared-youtube/library/src/main/java/app/morphe/extension/shared/patches/components/LithoFilterPatch.java"
+          test -s "$src"
+          test -s "$dst"
+          cp "$src" "$dst"
+          grep -q 'private BufferAsciiStrings lazyAsciiStrings' "$dst"
+          grep -q 'LITHO_LAYOUT_THREAD_POOL_SIZE = 1' "$dst"
+          echo 'Filtros y numero de hilos conservados.'
+
+      - name: Preparar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Compilar MPP optimizado
+        working-directory: morphe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: ./gradlew :patches:buildAndroid --no-daemon --stacktrace
+
+      - name: Subir archivo MPP compilado
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Morphe-YouTube-Optim03-MPP
+          path: morphe/patches/build/libs/*.mpp
+          if-no-files-found: error
+
+      - name: Adjuntar reporte de fallos
+        if: failure()
+        run: echo 'La compilacion fallo. No se declara un MPP optimizado estable.'
